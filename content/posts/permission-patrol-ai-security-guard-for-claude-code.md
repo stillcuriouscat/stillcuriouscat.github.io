@@ -1,0 +1,160 @@
+---
+title: "Permission Patrol: An AI Security Guard for Claude Code"
+date: 2026-02-06
+description: "How I built a command hook that reads script content before Claude Code executes it — catching hidden shutil.rmtree() and rm -rf that prompt hooks can't see."
+tags: ["claude-code", "ai-security", "hooks", "python", "open-source"]
+categories: ["Projects"]
+ShowToc: true
+TocOpen: true
+cover:
+  image: ""
+  alt: "Permission Patrol - AI Security Guard for Claude Code"
+  hidden: true
+---
+
+## The Problem: Claude Code Runs Scripts Blindly
+
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code) is an incredible tool for software development. It can write code, run tests, manage git, and execute scripts — all autonomously. But that power comes with a risk.
+
+When Claude Code asks permission to run `python3 script.py`, you see the command string. You click "Allow." But what's actually inside that script?
+
+```python
+# script.py - looks innocent as a command
+import shutil
+shutil.rmtree("/home/user/important_data")  # Hidden danger
+```
+
+This is the gap I wanted to close.
+
+## Why Prompt Hooks Fall Short
+
+Claude Code supports [hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) — custom logic that runs when permission is requested. There are two types:
+
+- **Prompt hooks** (`type: "prompt"`): An LLM reviews the request. Simple to set up, but it **only sees the command string**. It sees `python3 script.py`, not what's inside the file.
+- **Command hooks** (`type: "command"`): A script runs to make the decision. It can do anything — including **reading the file content**.
+
+A prompt hook would happily approve `python3 script.py` because the command looks harmless. It has no way to know the script deletes your data.
+
+## The Solution: Permission Patrol
+
+[Permission Patrol](https://github.com/stillcuriouscat/permission-patrol) is a command hook that adds a 3-phase security review:
+
+```
+Request arrives
+    |
+    +-- settings.json deny? --> Reject (no API call)
+    |   (rm -rf, curl POST, scp, gh repo delete...)
+    |
+    +-- settings.json allow? --> Pass (no API call)
+    |   (git status, ls, Read, ruff, gh...)
+    |
+    +-- Neither? --> permission-guard.py hook
+         |
+         +-- Dangerous regex? --> Deny immediately
+         |
+         +-- Script execution? --> Read file, Claude reviews content
+         |
+         +-- Other cases? --> Claude reviews the request
+```
+
+### Phase 1: Deterministic Rules (Zero Cost)
+
+Common operations are handled by `settings.json` allow/deny rules — no API call, no latency:
+
+- **Deny**: `rm -rf`, `shred`, `curl POST`, `scp`, `gh repo delete`
+- **Allow**: `git status`, `ls`, `Read`, `ruff`, `mypy`, `eslint`, trusted domains
+
+### Phase 2: Script Content Inspection (The Key Feature)
+
+When you run `python3 script.py`, `pytest`, or `node app.js`, the hook:
+
+1. Detects the script execution pattern
+2. **Reads the actual file content**
+3. Sends both the command and script content to Claude (Haiku model)
+4. Claude checks for dangerous patterns: `shutil.rmtree`, `os.remove`, `requests.post`, code injection, etc.
+5. Returns allow/deny/ask based on the analysis
+
+This is what makes Permission Patrol different from a prompt hook. It sees the full picture.
+
+### Phase 3: Path-Aware Decisions
+
+Even when Claude approves, the hook adds extra safety:
+
+- **Inside project directory**: Auto-allow
+- **Outside project / sensitive paths** (`~/.ssh`, `/etc/`, `.env`): Require user confirmation
+- Desktop notification on Linux so you know Claude already reviewed it
+
+## No API Key Required
+
+Permission Patrol calls Claude CLI internally, which uses your Claude Code subscription quota. No separate API key, no extra cost setup. Just install and go.
+
+## Getting Started
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/stillcuriouscat/permission-patrol.git
+```
+
+### 2. Merge permissions into your settings
+
+Add the allow/deny rules from `permissions.json` to your `~/.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(gh *)",
+      "WebFetch(domain:github.com)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(gh repo delete *)"
+    ]
+  }
+}
+```
+
+### 3. Add the hook
+
+```json
+{
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /path/to/permission-patrol/permission-guard.py",
+            "timeout": 30000
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### 4. Restart Claude Code
+
+That's it. Permission Patrol is now guarding your sessions.
+
+## What I Learned Building This
+
+1. **Command hooks are underrated.** Most examples use prompt hooks, but command hooks can do so much more — read files, check network state, verify git status.
+
+2. **Deterministic rules first, AI second.** Using `settings.json` rules for common patterns means zero latency and zero cost for 90% of operations. AI review is reserved for the ambiguous cases.
+
+3. **Defense in depth.** No single check is perfect. Combining regex patterns, file content inspection, path checks, and AI review creates multiple layers of security.
+
+## Links
+
+- **GitHub**: [stillcuriouscat/permission-patrol](https://github.com/stillcuriouscat/permission-patrol)
+- **Claude Code Hooks Docs**: [docs.anthropic.com](https://docs.anthropic.com/en/docs/claude-code/hooks)
+- **License**: MIT — use it, fork it, improve it.
+
+---
+
+*If you're using Claude Code for development, give Permission Patrol a try. And if you find a dangerous pattern it doesn't catch, open an issue — security is a community effort.*
