@@ -1,0 +1,64 @@
+# Site settings
+title: "stillcuriouscat"
+name: "stillcuriouscat"
+description: "Developer blog about AI tooling, Claude Code, and security"
+url: "https://stillcuriouscat.github.io"
+baseurl: ""
+
+# Theme
+remote_theme: mmistakes/minimal-mistakes
+
+# Plugins (GitHub Pages whitelisted)
+plugins:
+  - jekyll-sitemap
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-remote-theme
+
+# Site author
+author:
+  name: "stillcuriouscat"
+  links:
+    - label: "GitHub"
+      icon: "fab fa-fw fa-github"
+      url: "https://github.com/stillcuriouscat"
+    - label: "X"
+      icon: "fab fa-fw fa-x-twitter"
+      url: "https://x.com/stillcurio3982"
+
+# Social sharing
+twitter:
+  username: "stillcurio3982"
+
+# Reading files
+encoding: "utf-8"
+
+# Outputting
+permalink: /posts/:slug/
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: posts
+    values:
+      layout: single
+      read_time: true
+      show_date: true
+      share: true
+      toc: true
+      toc_sticky: true
+      comments: true
+      author_profile: true
+
+# Markdown
+markdown: kramdown
+kramdown:
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    block:
+      line_numbers: false
+
+# Comments
+comments:
+  provider: "custom"

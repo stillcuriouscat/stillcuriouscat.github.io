@@ -1,7 +1,7 @@
 ---
 title: "Permission Patrol: An AI Security Guard for Claude Code"
 date: 2026-02-06
-description: "Stop using --dangerously-skip-permissions. Permission Patrol is an open-source command hook that reads script content before Claude Code executes it — catching hidden rm -rf, data exfiltration, and prompt injection that prompt hooks can't see."
+excerpt: "Stop using --dangerously-skip-permissions. Permission Patrol is an open-source command hook that reads script content before Claude Code executes it — catching hidden rm -rf, data exfiltration, and prompt injection that prompt hooks can't see."
 tags:
   - claude-code
   - ai-security
@@ -13,26 +13,10 @@ tags:
   - prompt-injection
   - defense-in-depth
   - script-inspection
-keywords:
-  - claude code security
-  - claude code dangerously-skip-permissions
-  - claude code hooks
-  - claude code command hook
-  - claude code permission guard
-  - ai agent security
-  - claude code safe mode
-  - claude code script inspection
-  - prompt injection prevention
-  - defense in depth ai
-  - claude code permission request hook
-  - how to secure claude code
-categories: ["Projects"]
-ShowToc: true
-TocOpen: true
-cover:
-  image: ""
-  alt: "Permission Patrol - AI Security Guard for Claude Code"
-  hidden: true
+categories:
+  - Projects
+toc: true
+toc_sticky: true
 ---
 
 ## Why `--dangerously-skip-permissions` Is Dangerous

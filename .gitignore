@@ -1,3 +1,11 @@
-public/
-resources/
-.hugo_build.lock
+_site/
+.sass-cache/
+.jekyll-cache/
+.jekyll-metadata
+vendor/
+.bundle/
+Gemfile.lock
+*.png
+*.jpeg
+*.jpg
+.playwright-mcp/
