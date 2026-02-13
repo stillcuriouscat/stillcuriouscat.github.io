@@ -8,12 +8,13 @@ baseurl: ""
 # Theme
 remote_theme: mmistakes/minimal-mistakes
 
-# Plugins (GitHub Pages whitelisted)
+# Plugins
 plugins:
   - jekyll-sitemap
   - jekyll-feed
   - jekyll-seo-tag
   - jekyll-remote-theme
+  - jekyll-include-cache
 
 # Site author
 author:

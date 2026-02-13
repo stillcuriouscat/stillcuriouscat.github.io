@@ -178,6 +178,7 @@ When you run `python3 script.py`, `pytest`, or `node app.js`, the hook:
 
 Here's how the script content is injected into the review prompt — this is the part prompt hooks simply cannot do:
 
+{% raw %}
 ````python
 # Detect script execution and read the file
 script_match = re.search(
@@ -206,6 +207,7 @@ or {{"decision": "deny", "reason": "..."}}
 or {{"decision": "ask", "reason": "..."}}
 """
 ````
+{% endraw %}
 
 ### Calling Claude CLI (No API Key Required)
 
