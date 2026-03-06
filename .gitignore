@@ -9,3 +9,10 @@ Gemfile.lock
 *.jpeg
 *.jpg
 .playwright-mcp/
+
+# Local handoff documents
+handoffs/
+decisions.md
+bugs.md
+open_questions.md
+key_facts.md
