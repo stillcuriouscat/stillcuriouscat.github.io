@@ -10,6 +10,9 @@ Gemfile.lock
 *.jpg
 .playwright-mcp/
 
+# Chinese drafts (private, not published)
+_drafts/
+
 # Local handoff documents
 handoffs/
 decisions.md
