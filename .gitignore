@@ -19,3 +19,7 @@ decisions.md
 bugs.md
 open_questions.md
 key_facts.md
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
