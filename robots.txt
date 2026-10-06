@@ -1,4 +1,3 @@
 User-agent: *
 Allow: /
-Sitemap: https://stillcuriouscat.github.io/sitemap.xml
-Sitemap: https://stillcuriouscat.github.io/sitemap.txt
+Sitemap: https://stillcuriouscat.com/sitemap.xml
