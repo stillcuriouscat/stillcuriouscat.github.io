@@ -63,3 +63,14 @@ kramdown:
 # Comments
 comments:
   provider: "custom"
+
+# Build exclusions (Jekyll 3.x replaces the default list, so defaults are repeated)
+exclude:
+  - AGENTS.md
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
